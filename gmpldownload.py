@@ -21,6 +21,7 @@ Options:
   -q, --quiet                   Don't output status messages.
                                 With -l,--log will display gmusicapi warnings.
                                 With -d,--dry-run will display song list.
+  -m, --m3u                     Output playlists in relative M3U format
   -f FILTER, --filter FILTER    Filter Google songs by field:pattern pair (e.g. "artist:Muse").
                                 Songs can match any filter criteria.
                                 This option can be set multiple times.
@@ -59,7 +60,7 @@ def main():
 				safe_print("{0} by {1}".format(playlist['name'], playlist['ownerName']))
 		else:
 			print_("Downloading {0} playlists from Google Music\n".format(len(all_playlists)))
-			mmw.download_playlist(all_playlists, cli['output'])
+			mmw.download_playlist(all_playlists, cli['output'], cli['m3u'])
 	else:
 		safe_print("\nNo playlists to download")
 

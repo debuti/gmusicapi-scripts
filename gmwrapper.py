@@ -395,7 +395,7 @@ class MobileClientWrapper(_Base):
 		return google_playlists
 
 	@gm_utils.accept_singleton(basestring)
-	def download_playlist(self, playlists, output):
+	def download_playlist(self, playlists, output, m3u=False):
 		"""Download playlists from Google Music."""
 
 		playlistnum = 0
@@ -407,7 +407,7 @@ class MobileClientWrapper(_Base):
 			playlistnum += 1
 			playlist_name = playlist['name']
 			try:
-				self.print_("Downloading {0} by {1}".format(playlist_name, playlist['ownerName']), end="\r")
+				self.print_("Downloading {0} by {1}\n".format(playlist_name, playlist['ownerName']), end="\r")
 				sys.stdout.flush()
 
 				if playlist.get('type') == 'SHARED':
@@ -417,7 +417,7 @@ class MobileClientWrapper(_Base):
 
 				if playlist.get('type') == 'USER_GENERATED':
 					temp_playlists = self.api.get_all_user_playlist_contents()
-					playlist = [p for p in temp_playlists if p.get('id') == playlist['id']]
+					playlist = [p for p in temp_playlists if p.get('id') == playlist['id']].pop(0)
 					#self.print_(playlist)
 
 			except CallFailure as e:
@@ -425,18 +425,45 @@ class MobileClientWrapper(_Base):
 				errors[playlist_name] = e
 
 			else:
-				filename = playlist_name + ".gpl"
-				if output != os.getcwd():
-					filename = os.path.join(output, filename)
+				if m3u:
+					temp_songs = self.api.get_all_songs()
+					filename = playlist_name + ".m3u"
+
+					if output != os.getcwd():
+						filename = os.path.join(output, filename)
+					else:
+						filename = filename
+
+					with open(filename, 'w') as temp: 
+						temp.write("#EXTM3U\n\n".encode("UTF-8"))
+						for song in playlist['tracks']:
+							for metadata in temp_songs:
+								if metadata.get('id') == song["trackId"]:
+									temp.write(u"#EXTINF:{duration},{artist} - {title}\n".format(duration=int(metadata["durationMillis"])/1000, 
+																								artist=metadata["artist"], 
+																								title=metadata["title"]).encode('UTF-8'))
+									temp.write(u"{artist} - {year} - {album}/{artist}-{trackNumber}-{title}.mp3\n\n".format(album=metadata["album"], 
+																															artist=metadata["artist"], 
+																															title=metadata["title"], 
+																															trackNumber=metadata["trackNumber"] , 
+																															year=metadata["year"]).encode('UTF-8'))
+									break
+
+					self.print_("({num:>{pad}}/{total}) Successfully downloaded {file}".format(num=playlistnum, total=total, file=filename, pad=pad))
+					
 				else:
-					filename = filename
+					filename = playlist_name + ".gpl"
+					if output != os.getcwd():
+						filename = os.path.join(output, filename)
+					else:
+						filename = filename
 
-				with tempfile.NamedTemporaryFile(delete=False) as temp:
-					temp.write(json.dumps(playlist))
+					with tempfile.NamedTemporaryFile(delete=False) as temp:
+						temp.write(json.dumps(playlist, sort_keys=True, indent=2, separators=(',', ': ')))
 
-				shutil.move(temp.name, filename)
+					shutil.move(temp.name, filename)
 
-				self.print_("({num:>{pad}}/{total}) Successfully downloaded {file}".format(num=playlistnum, total=total, file=filename, pad=pad))
+					self.print_("({num:>{pad}}/{total}) Successfully downloaded {file}".format(num=playlistnum, total=total, file=filename, pad=pad))
 
 		if errors:
 			self.print_("\n\nThe following errors occurred:\n")
