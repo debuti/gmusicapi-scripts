@@ -7,6 +7,8 @@ import re
 import shutil
 import sys
 import tempfile
+import ConfigParser
+import json
 
 import mutagen
 from gmusicapi import CallFailure
@@ -299,8 +301,24 @@ class MobileClientWrapper(_Base):
 
 		self.print_ = safe_print if not quiet else lambda *args, **kwargs: None
 
-	def login(self, *args):
+	def login(self, pwdauth_file="pwdauth", save_cred=False, *args):
 		"""Authenticate the gmusicapi Mobileclient instance."""
+		config = ConfigParser.ConfigParser()
+
+		pwdauth_cred = os.path.join(os.path.dirname(OAUTH_FILEPATH), pwdauth_file + '.cred')
+
+		if os.path.isfile(pwdauth_cred):
+			try:
+				config.read(pwdauth_cred)
+				username = config.get("General", "usr")
+				password = config.get("General", "pwd")
+
+				self.api.login(username, password)
+	
+				if self.api.is_authenticated():
+					return True
+			except:
+				pass
 
 		if len(args) == 2:
 			username, password = args[0], args[1]
@@ -322,6 +340,16 @@ class MobileClientWrapper(_Base):
 			self.print_("Sorry, login failed.")
 
 			return False
+
+		if save_cred:
+			pwdauth_credfile = open(pwdauth_cred,'w')
+			config.remove_section("General")
+			config.add_section("General")
+			config.set("General","usr",username)
+			config.set("General","pwd",password)
+			config.write(pwdauth_credfile)
+			pwdauth_credfile.close()
+			self.print_("Credentials saved to file " + pwdauth_cred)
 
 		self.print_("Successfully logged in.\n")
 
@@ -348,6 +376,73 @@ class MobileClientWrapper(_Base):
 		self.print_("Loaded {0} Google Music songs\n".format(len(google_songs)))
 
 		return google_songs
+
+	def get_google_playlists(self, filters=None, filter_all=False):
+		"""Load play list from Google Music library."""
+
+		self.print_("Loading Google Music playlists...")
+
+		google_playlists = []
+		filter_playlists = []
+
+		playlists = self.api.get_all_playlists()
+
+		google_playlists, filter_playlists = match_filters_google(playlists, filters, filter_all)
+
+		self.print_("Filtered {0} Google Music playlists".format(len(filter_playlists)))
+		self.print_("Loaded {0} Google Music playlists\n".format(len(google_playlists)))
+
+		return google_playlists
+
+	@gm_utils.accept_singleton(basestring)
+	def download_playlist(self, playlists, output):
+		"""Download playlists from Google Music."""
+
+		playlistnum = 0
+		total = len(playlists)
+		errors = {}
+		pad = len(str(total))
+
+		for playlist in playlists:
+			playlistnum += 1
+			playlist_name = playlist['name']
+			try:
+				self.print_("Downloading {0} by {1}".format(playlist_name, playlist['ownerName']), end="\r")
+				sys.stdout.flush()
+
+				if playlist.get('type') == 'SHARED':
+					share_token = ['shareToken']
+					playlist = self.api.get_shared_playlist_contents(share_token)
+					#self.print_(playlist)
+
+				if playlist.get('type') == 'USER_GENERATED':
+					temp_playlists = self.api.get_all_user_playlist_contents()
+					playlist = [p for p in temp_playlists if p.get('id') == playlist['id']]
+					#self.print_(playlist)
+
+			except CallFailure as e:
+				self.print_("({num:>{pad}}/{total}) Failed to download  {file} | {error}".format(num=playlistnum, total=total, file=playlist_name, error=e, pad=pad))
+				errors[playlist_name] = e
+
+			else:
+				filename = playlist_name + ".gpl"
+				if output != os.getcwd():
+					filename = os.path.join(output, filename)
+				else:
+					filename = filename
+
+				with tempfile.NamedTemporaryFile(delete=False) as temp:
+					temp.write(json.dumps(playlist))
+
+				shutil.move(temp.name, filename)
+
+				self.print_("({num:>{pad}}/{total}) Successfully downloaded {file}".format(num=playlistnum, total=total, file=filename, pad=pad))
+
+		if errors:
+			self.print_("\n\nThe following errors occurred:\n")
+			for filename, e in errors.iteritems():
+				self.print_("{file} | {error}".format(file=filename, error=e))
+			self.print_("\nThese files may need to be synced again.\n")
 
 
 class MusicManagerWrapper(_Base):
