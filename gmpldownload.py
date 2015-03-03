@@ -6,7 +6,7 @@ More information at https://github.com/thebigmunch/gmusicapi-scripts.
 
 Usage:
   gmdownload.py (-h | --help)
-  gmdownload.py [-t TPL]... [options] [<output>]
+  gmdownload.py [options] [<output>]
 
 Arguments:
   output                        Output file or directory name which can include a template pattern.
@@ -23,7 +23,7 @@ Options:
                                 With -d,--dry-run will display song list.
   -m, --m3u8                    Output playlists in relative M3U8 format
   -t TPL, --template TPL        Template to apply to the relative paths in the m3u format.
-                                (e.g. {artist} - {year} - {album}/{artist}-{trackNumber}-{title}.mp3)
+                                [Default: {artist}/{artist} - {year} - {album}/{artist}-{trackNumber}-{title}.mp3]
 """
 
 from __future__ import print_function, unicode_literals
@@ -44,9 +44,6 @@ def main():
 
 	if not cli['output']:
 		cli['output'] = os.getcwd()
-
-	if not cli['template']:
-		cli['template'] = u'{artist} - {year} - {album}/{artist}-{trackNumber}-{title}.mp3'
 
 	mmw = MobileClientWrapper(log=cli['log'])
 	mmw.login(pwdauth_file=cli['cred'], save_cred=cli['save'])
