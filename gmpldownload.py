@@ -6,7 +6,7 @@ More information at https://github.com/thebigmunch/gmusicapi-scripts.
 
 Usage:
   gmdownload.py (-h | --help)
-  gmdownload.py [-f FILTER]... [options] [<output>]
+  gmdownload.py [-t TPL]... [options] [<output>]
 
 Arguments:
   output                        Output file or directory name which can include a template pattern.
@@ -21,11 +21,9 @@ Options:
   -q, --quiet                   Don't output status messages.
                                 With -l,--log will display gmusicapi warnings.
                                 With -d,--dry-run will display song list.
-  -m, --m3u                     Output playlists in relative M3U format
-  -f FILTER, --filter FILTER    Filter Google songs by field:pattern pair (e.g. "artist:Muse").
-                                Songs can match any filter criteria.
-                                This option can be set multiple times.
-  -a, --all                     Songs must match all filter criteria.
+  -m, --m3u8                    Output playlists in relative M3U8 format
+  -t TPL, --template TPL        Template to apply to the relative paths in the m3u format.
+                                (e.g. {artist} - {year} - {album}/{artist}-{trackNumber}-{title}.mp3)
 """
 
 from __future__ import print_function, unicode_literals
@@ -47,10 +45,13 @@ def main():
 	if not cli['output']:
 		cli['output'] = os.getcwd()
 
+	if not cli['template']:
+		cli['template'] = u'{artist} - {year} - {album}/{artist}-{trackNumber}-{title}.mp3'
+
 	mmw = MobileClientWrapper(log=cli['log'])
 	mmw.login(pwdauth_file=cli['cred'], save_cred=cli['save'])
 
-	all_playlists = mmw.get_google_playlists(filters=cli['filter'], filter_all=cli['all'])
+	all_playlists = mmw.get_google_playlists()
 	
 	if all_playlists:
 		if cli['dry-run']:
@@ -60,7 +61,7 @@ def main():
 				safe_print("{0} by {1}".format(playlist['name'], playlist['ownerName']))
 		else:
 			print_("Downloading {0} playlists from Google Music\n".format(len(all_playlists)))
-			mmw.download_playlist(all_playlists, cli['output'], cli['m3u'])
+			mmw.download_playlist(all_playlists, output=cli['output'], template=cli['template'], m3u8=cli['m3u8'])
 	else:
 		safe_print("\nNo playlists to download")
 

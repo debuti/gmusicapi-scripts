@@ -382,20 +382,14 @@ class MobileClientWrapper(_Base):
 
 		self.print_("Loading Google Music playlists...")
 
-		google_playlists = []
-		filter_playlists = []
-
 		playlists = self.api.get_all_playlists()
 
-		google_playlists, filter_playlists = match_filters_google(playlists, filters, filter_all)
+		self.print_("Loaded {0} Google Music playlists\n".format(len(playlists)))
 
-		self.print_("Filtered {0} Google Music playlists".format(len(filter_playlists)))
-		self.print_("Loaded {0} Google Music playlists\n".format(len(google_playlists)))
-
-		return google_playlists
+		return playlists
 
 	@gm_utils.accept_singleton(basestring)
-	def download_playlist(self, playlists, output, m3u=False):
+	def download_playlist(self, playlists, output, template, m3u8=False):
 		"""Download playlists from Google Music."""
 
 		playlistnum = 0
@@ -407,27 +401,25 @@ class MobileClientWrapper(_Base):
 			playlistnum += 1
 			playlist_name = playlist['name']
 			try:
-				self.print_("Downloading {0} by {1}\n".format(playlist_name, playlist['ownerName']), end="\r")
+				self.print_("Downloading {0} by {1}\n".format(playlist['name'], playlist['ownerName']), end="\r")
 				sys.stdout.flush()
 
 				if playlist.get('type') == 'SHARED':
-					share_token = ['shareToken']
+					share_token = playlist['shareToken']
 					playlist = self.api.get_shared_playlist_contents(share_token)
-					#self.print_(playlist)
 
 				if playlist.get('type') == 'USER_GENERATED':
 					temp_playlists = self.api.get_all_user_playlist_contents()
 					playlist = [p for p in temp_playlists if p.get('id') == playlist['id']].pop(0)
-					#self.print_(playlist)
 
 			except CallFailure as e:
-				self.print_("({num:>{pad}}/{total}) Failed to download  {file} | {error}".format(num=playlistnum, total=total, file=playlist_name, error=e, pad=pad))
-				errors[playlist_name] = e
+				self.print_("({num:>{pad}}/{total}) Failed to download  {file} | {error}".format(num=playlistnum, total=total, file=playlist['name'], error=e, pad=pad))
+				errors[playlist['name']] = e
 
 			else:
-				if m3u:
+				if m3u8:
 					temp_songs = self.api.get_all_songs()
-					filename = playlist_name + ".m3u"
+					filename = playlist['name'] + ".m3u8"
 
 					if output != os.getcwd():
 						filename = os.path.join(output, filename)
@@ -435,24 +427,27 @@ class MobileClientWrapper(_Base):
 						filename = filename
 
 					with open(filename, 'w') as temp: 
-						temp.write("#EXTM3U\n\n".encode("UTF-8"))
+						temp.write("#EXTM3U\n\n".encode('UTF-8'))
 						for song in playlist['tracks']:
 							for metadata in temp_songs:
 								if metadata.get('id') == song["trackId"]:
 									temp.write(u"#EXTINF:{duration},{artist} - {title}\n".format(duration=int(metadata["durationMillis"])/1000, 
-																								artist=metadata["artist"], 
-																								title=metadata["title"]).encode('UTF-8'))
-									temp.write(u"{artist} - {year} - {album}/{artist}-{trackNumber}-{title}.mp3\n\n".format(album=metadata["album"], 
-																															artist=metadata["artist"], 
-																															title=metadata["title"], 
-																															trackNumber=metadata["trackNumber"] , 
-																															year=metadata["year"]).encode('UTF-8'))
+																									artist=metadata["artist"], 
+																									title=metadata["title"]).encode('UTF-8'))
+									temp.write(template.format(album=metadata["album"], 
+																artist=metadata["artist"], 
+																title=metadata["title"], 
+																trackNumber=metadata["trackNumber"] , 
+																year=metadata["year"]).encode('UTF-8'))
+									temp.write(u'\n\n')
+									self.print_(u'  {artist} - {title} added'.format(artist=metadata["artist"], 
+																					title=metadata["title"]).encode('UTF-8'))
 									break
 
 					self.print_("({num:>{pad}}/{total}) Successfully downloaded {file}".format(num=playlistnum, total=total, file=filename, pad=pad))
 					
 				else:
-					filename = playlist_name + ".gpl"
+					filename = playlist['name'] + ".gpl"
 					if output != os.getcwd():
 						filename = os.path.join(output, filename)
 					else:
